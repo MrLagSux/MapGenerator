@@ -38,8 +38,8 @@ let textureNames = [];
 let textureList = [];
 
 function loadImages() {
-  textureList[0] = loadImage("Tiles/usedTextures/textures/grass.jpg");
-  textureList[1] = loadImage("Tiles/usedTextures/textures/sand.jpg");
+  textureList[0] = loadImage("Tiles/usedTextures/textures/grass.JPG");
+  textureList[1] = loadImage("Tiles/usedTextures/textures/sand.JPG");
   textureList[2] = loadImage("Tiles/usedTextures/textures/water.jpg");
 
   entityList[0] = loadImage("Tiles/usedTextures/entities/enemy0.png");
