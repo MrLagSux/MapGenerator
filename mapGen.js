@@ -28,7 +28,7 @@ let len;
 let defaultSaveName = "CustomMapForGame_";
 let map;
 let dim = 32;
-let mapSize = 1000;
+let mapSize = 800;
 let tileSize = mapSize / dim;
 let minimap;
 let colorList;
@@ -42,15 +42,15 @@ function loadImages() {
   textureList[1] = loadImage("Tiles/usedTextures/textures/sand.JPG");
   textureList[2] = loadImage("Tiles/usedTextures/textures/water.jpg");
 
-  entityList[0] = loadImage("Tiles/usedTextures/entities/enemy0.png");
-  entityList[1] = loadImage("Tiles/usedTextures/entities/enemy1.png");
-  entityList[2] = loadImage("Tiles/usedTextures/entities/boss.png");
-  entityList[3] = loadImage("Tiles/usedTextures/entities/key.png");
-  entityList[4] = loadImage("Tiles/usedTextures/entities/trap.png");
-  entityList[5] = loadImage("Tiles/usedTextures/entities/portal.png");
-  entityList[6] = loadImage("Tiles/usedTextures/entities/player.png");
+  entityList[0] = loadImage("Tiles/usedTextures/entities/none.png");
+  entityList[1] = loadImage("Tiles/usedTextures/entities/enemy0.png");
+  entityList[2] = loadImage("Tiles/usedTextures/entities/enemy1.png");
+  entityList[3] = loadImage("Tiles/usedTextures/entities/boss.png");
+  entityList[4] = loadImage("Tiles/usedTextures/entities/key.png");
+  entityList[5] = loadImage("Tiles/usedTextures/entities/trap.png");
+  entityList[6] = loadImage("Tiles/usedTextures/entities/portal.png");
+  entityList[7] = loadImage("Tiles/usedTextures/entities/player.png");
 }
-
 
 function setup() {
   createCanvas(screen.width, screen.height);
@@ -65,14 +65,14 @@ function setup() {
   ];
 
   textureNames = ["Grass", "Sand", "Water"];
-  entityNames = ["Scorpion", "Spider", "Boss", "Key", "Trap", "Portal"];
+  entityNames = ["None", "Scorpion", "Spider", "Boss", "Key", "Trap", "Portal", "Player"];
 
   saveButton = createButton('Save Map');
   saveButton.position(mapSize + 110, 0);
   saveButton.size(100, 50);
   saveButton.mousePressed(saveMap);
 
-  saveSlotInput = createInput('Save Slot Index Here');
+  saveSlotInput = createInput('File Name Here');
   saveSlotInput.position(mapSize, 0);
   saveSlotInput.size(100, 40);
 
@@ -81,7 +81,7 @@ function setup() {
   loadButton.size(100, 50);
   loadButton.mousePressed(loadMap);
 
-  loadSlotInput = createInput('Load Slot Index Here');
+  loadSlotInput = createInput('File Name Here');
   loadSlotInput.position(mapSize, 50);
   loadSlotInput.size(100, 40);
 
@@ -137,7 +137,43 @@ function setup() {
   generateMap();
 }
 
+function loadActualMap(sav) {
+  let newMap = new Map(0, 0);
+  let mapFile = sav;
+  dim = mapFile.width;
+  tileSize = mapSize / dim;
+  newMap.width = dim;
+  newMap.height = dim;
+  let getID = (a) => {
+    return {
+      tileID: round((a - (a % 10)) / 10),
+      entityID: a % 10
+    };
+  };
+  mapFile.loadPixels();
+  for (let x = 0; x < dim; x++) {
+    newMap.tiles[x] = [];
+    for (let y = 0; y < dim; y++) {
+      newMap.tiles[x][y] = new TileSet(x, y, 0);
+      //let i = mapFile.get(x, y)[0]; //Slow AF .get(x, y)
+      let i = mapFile.pixels[(y * dim + x) * 4]; //We can just directly access the pixel array for super speed
+      //if (i === 255 || i === 0) continue;
+      //console.log(i);
+      let ids = getID(i);
+      if (ids.tileID !== 0) newMap.tiles[x][y].set(ids.tileID);
+      if (ids.entityID !== 0) newMap.tiles[x][y].setEntity(ids.entityID);
+    }
+  }
+  mapFile.updatePixels();
+
+  console.log(newMap);
+  map = newMap;
+}
+
 function loadMap() {
+  let saveName = 'maps/' + loadSlotInput.value() + '.png';
+  let sav = loadImage(saveName, loadActualMap);
+  /*
   let saveName = defaultSaveName + loadSlotInput.value();
   let storedSave = localStorage.getItem(saveName);
   if (storedSave === null || typeof storedSave === "undefined") {
@@ -207,33 +243,88 @@ function loadMap() {
   console.log(newMap);
   map = newMap;
   generateMinimap();
+  */
 }
 
 function saveMap() {
+  //Helper function to get an unique ID based on tileID and entityID
+  let getID = (a, b) => {
+    return a * 10 + b;
+  };
+
+  let sav = createImage(dim, dim);
+  sav.loadPixels();
+  for (let i = 0; i < dim; i++) {
+    for (let j = 0; j < dim; j++) {
+      sav.set(i, j, getID(map.tiles[i][j].tileID, map.tiles[i][j].entityID));
+    }
+  }
+  sav.updatePixels();
+  save(sav, saveSlotInput.value() + '.png');
+  /*
   let toBeSaved = {
     dim: dim,
-    xSize: map.width,
-    ySize: map.height,
+    defaultID: -1,
     tiles: []
   };
-  for (let x = 0; x < map.width; x++) {
-    for (let y = 0; y < map.height; y++) {
-      let tile = map.tiles[x][y];
-      if (tile.tileID === 0 && tile.entityID === -1) continue;
-      else {
-        let t = {
-          xPos: x,
-          yPos: y,
-          tileID: tile.tileID,
-          entityID: tile.entityID,
+
+  let textureCount, mostUsedID = 0,
+    mostUsedCount;
+
+  //Find most used texture ID so that when we load a map we can set a default value
+  {
+    textureCount = new Array(textureList.length);
+    textureCount.fill(0);
+    //Go through tile set, write down how often a texture appeared
+    for (let x = 0; x < map.width; x++) {
+      for (let y = 0; y < map.height; y++) {
+        textureCount[map.tiles[x][y].tileID]++;
+      }
+    }
+    mostUsedID = 0;
+    mostUsedCount = 0;
+    //Find actual most used texture ID
+    for (let i = 0; i < textureCount.length; i++) {
+      if (textureCount[i] > mostUsedCount) {
+        mostUsedCount = textureCount[i];
+        mostUsedID = i;
+      }
+    }
+    toBeSaved.defaultID = mostUsedID;
+  }
+
+
+
+  //Go through tile set and save tiles different to the default tile
+  {
+    for (let x = 0; x < map.width; x++) {
+      for (let y = 0; y < map.height; y++) {
+        let tile = map.tiles[x][y];
+        if (tile.tileID === mostUsedID && tile.entityID === -1) continue; //Don't want to save default tiles
+        else {
+          //Note: We now need x and y pos of the tile so that we can savely place it when loading
+          let uniqueID = getID(tile.tileID, tile.entityID);
+          if (typeof toBeSaved.tiles[uniqueID] === 'undefined') toBeSaved.tiles[uniqueID] = [];
+          let t = {
+            x: tile.x,
+            y: tile.y
+          };
+          toBeSaved.tiles[uniqueID].push(t);
         }
-        toBeSaved.tiles.push(t);
       }
     }
   }
-  let save = btoa(JSON.stringify(toBeSaved));
-  let saveName = defaultSaveName + saveSlotInput.value();
-  localStorage.setItem(saveName, save);
+
+  console.log(toBeSaved);
+  const size = new TextEncoder().encode(JSON.stringify(toBeSaved)).length;
+  const kiloBytes = size / 1024;
+  console.log(kiloBytes);
+  let sav = btoa(JSON.stringify(toBeSaved));
+  console.log(sav);
+  let saveName = saveSlotInput.value() + '.txt';
+  saveStrings([sav], saveName);
+  //localStorage.setItem(saveName, save);
+  */
 }
 
 function clearMap() {
@@ -415,7 +506,7 @@ class TileSet {
     this.x = x;
     this.y = y;
     this.tileID = id;
-    this.entityID = -1;
+    this.entityID = 0;
     this.xPos = x * tileSize;
     this.yPos = y * tileSize;
     this.img = textureList[this.tileID];
@@ -430,13 +521,13 @@ class TileSet {
   }
 
   show() {
-    if (dim > 20) {
+    /*if (dim > 20) {
       if (this.entity) image(this.entity, this.xPos, this.yPos, tileSize, tileSize);
       else image(this.img, this.xPos, this.yPos, tileSize, tileSize);
-    } else {
-      image(this.img, this.xPos, this.yPos, tileSize, tileSize);
-      if (this.entity) image(this.entity, this.xPos, this.yPos, tileSize, tileSize);
-    }
+    } else {*/
+    image(this.img, this.xPos, this.yPos, tileSize, tileSize);
+    if (this.entity) image(this.entity, this.xPos, this.yPos, tileSize, tileSize);
+    //}
   }
 
   set(i) {
