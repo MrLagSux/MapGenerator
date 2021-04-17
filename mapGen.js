@@ -155,13 +155,13 @@ function loadActualMap(sav) {
     newMap.tiles[x] = [];
     for (let y = 0; y < dim; y++) {
       newMap.tiles[x][y] = new TileSet(x, y, 0);
-      //let i = mapFile.get(x, y)[0]; //Slow AF .get(x, y)
+      //let i = mapFile.get(x, y); //Slow AF .get(x, y)
       let i = mapFile.pixels[(y * dim + x) * 4]; //We can just directly access the pixel array for super speed
       //if (i === 255 || i === 0) continue;
-      //console.log(i);
+      //      console.log(i);
       let ids = getID(i);
-      if (ids.tileID !== 0) newMap.tiles[x][y].set(ids.tileID);
-      if (ids.entityID !== 0) newMap.tiles[x][y].setEntity(ids.entityID);
+      newMap.tiles[x][y].set(ids.tileID);
+      newMap.tiles[x][y].setEntity(ids.entityID);
     }
   }
   mapFile.updatePixels();
@@ -256,10 +256,14 @@ function saveMap() {
   sav.loadPixels();
   for (let i = 0; i < dim; i++) {
     for (let j = 0; j < dim; j++) {
-      sav.set(i, j, getID(map.tiles[i][j].tileID, map.tiles[i][j].entityID));
+      sav.pixels[(j * dim + i) * 4] = getID(map.tiles[i][j].tileID, map.tiles[i][j].entityID);
+      sav.pixels[(j * dim + i) * 4 + 1] = getID(map.tiles[i][j].tileID, map.tiles[i][j].entityID);
+      sav.pixels[(j * dim + i) * 4 + 2] = getID(map.tiles[i][j].tileID, map.tiles[i][j].entityID);
+      sav.pixels[(j * dim + i) * 4 + 3] = 255;
     }
   }
   sav.updatePixels();
+  console.log(sav);
   save(sav, saveSlotInput.value() + '.png');
   /*
   let toBeSaved = {
@@ -331,7 +335,7 @@ function clearMap() {
   for (let x = 0; x < map.width; x++) {
     for (let y = 0; y < map.height; y++) {
       map.tiles[x][y].set(0);
-      map.tiles[x][y].setEntity(-1);
+      map.tiles[x][y].setEntity(0);
     }
   }
 }
@@ -487,7 +491,6 @@ function mousePressed() {
       let x = floor(mouseX * dim / mapSize);
       let y = floor(mouseY * dim / mapSize);
       map.setEntity(x, y, currentEntity);
-
     }
   }
 }
@@ -510,14 +513,13 @@ class TileSet {
     this.xPos = x * tileSize;
     this.yPos = y * tileSize;
     this.img = textureList[this.tileID];
-    this.entity = null;
+    this.entity = entityList[this.entityID];
     //this.img.size(dim, dim);
   }
 
   setEntity(i) {
     this.entityID = i;
-    if (i === -1) this.entity = null;
-    else this.entity = entityList[i];
+    this.entity = entityList[i];
   }
 
   show() {
@@ -526,7 +528,7 @@ class TileSet {
       else image(this.img, this.xPos, this.yPos, tileSize, tileSize);
     } else {*/
     image(this.img, this.xPos, this.yPos, tileSize, tileSize);
-    if (this.entity) image(this.entity, this.xPos, this.yPos, tileSize, tileSize);
+    image(this.entity, this.xPos, this.yPos, tileSize, tileSize);
     //}
   }
 
