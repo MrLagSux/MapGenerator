@@ -1,7 +1,26 @@
 html, body {
   margin: 0;
   padding: 0;
+  overflow: hidden;
 }
 canvas {
   display: block;
+}
+
+#ruler-cursive {
+  visibility: hidden;
+  white-space: nowrap;
+  position: absolute;
+  font-family: cursive;
+  font-weight: bold;
+  font-size: 100px;
+}
+
+#ruler-mono {
+  visibility: hidden;
+  white-space: nowrap;
+  position: absolute;
+  font-family: monospace;
+  font-weight: bold;
+  font-size: 100px;
 }
