@@ -160,15 +160,29 @@ function loadImages() {
 }
 
 function loadMap() {
-  let saveName = "MapStuff/maps/test" + slotInput.value() + ".png";
+  let saveName = "test" + parseInt(slotInput.value()) + ".png";
   //if (!isLocalhost) saveName = "Fruit-Smasher/" + saveName;
   loadImage(saveName, loadActualMap, generateDefaultMap);
 }
 
 function saveMap() {
-  let saveName = "MapStuff/maps/test" + slotInput.value() + ".png";
+  let saveName = "test" + parseInt(slotInput.value()) + ".png";
   //if (!isLocalhost) saveName = "Fruit-Smasher/" + saveName;
-  save(map, saveName);
+  let saveImg = createImage(map.width, map.height);
+  let getID = (a, b) => {
+    return 50 * a + b;
+  };
+  saveImg.loadPixels();
+  for (let i = 0; i < map.width; i++) {
+    for (let j = 0; j < map.height; j++) {
+      saveImg.pixels[(j * map.width + i) * 4] = getID(map.tiles[i][j].tileID, map.tiles[i][j].entityID);
+      saveImg.pixels[(j * map.width + i) * 4 + 1] = getID(map.tiles[i][j].tileID, map.tiles[i][j].entityID);
+      saveImg.pixels[(j * map.width + i) * 4 + 2] = getID(map.tiles[i][j].tileID, map.tiles[i][j].entityID);
+      saveImg.pixels[(j * map.width + i) * 4 + 3] = 255;
+    }
+  }
+  saveImg.updatePixels();
+  save(saveImg, saveName);
 }
 
 function setup() {
@@ -289,6 +303,9 @@ function setup() {
   );
   textureButtons.resize(mapSize + 325, 0, 100, 200);
 
+  slotInput = createInput("0");
+  slotInput.position(mapSize + 10, 100);
+  slotInput.size(75, 30);
 
   dimInput = createInput("10");
   dimInput.position(mapSize + 10, 10);
@@ -693,7 +710,6 @@ class WorldMap extends BaseUIBlock {
   }
 
   forceUpdate() {
-    debugger;
     console.log("Forcing Cached Tiles Update");
     let viewRange = this.viewRange;
     let xPos = camera.x - floor(viewRange / 2);
