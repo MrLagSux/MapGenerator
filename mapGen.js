@@ -101,13 +101,36 @@ function getAverageColor(img, i, j) {
 function generateDefaultMap() {
   dim = parseInt(dimInput.value());
   tileSize = mapSize / dim;
-  map = new WorldMap(dim, 0, 0, 1, 1);
+  if (typeof map === 'undefined') {
+    map = new WorldMap(dim, 0, 0, 1, 1);
+    map.resize(0, 0, mapSize, mapSize);
+  }
+  let tmpMap = new WorldMap(dim, map.xRelToParent, map.yRelToParent, map.wRelToParent, map.hRelToParent);
   map.clear();
-  map.resize(0, 0, 700, 700);
-  map.show();
+  map.removeImages();
+  map.tiles = [];
+  map.width = tmpMap.width;
+  map.height = tmpMap.height;
+  camera = {
+    x: map.width / 2,
+    y: map.height / 2
+  };
 
-  camera.x = dim / 2;
-  camera.y = dim / 2;
+  let getPixelValue = () => {
+    return 0;
+  }
+
+  for (let i = 0; i < tmpMap.tiles.length; i++) {
+    map.tiles[i] = [];
+    for (let j = 0; j < tmpMap.tiles.length; j++) {
+      map.tiles[i][j] = new TileSet(i, j);
+      let a = getPixelValue();
+      let b = getPixelValue();
+      let c = getPixelValue();
+      let d = getPixelValue();
+      map.tiles[i][j].setAll(a, b, c, d);
+    }
+  }
   map.forceUpdate();
 }
 
@@ -159,6 +182,64 @@ function loadImages() {
   entityColorList[EntityIDs.Player][2] = 0;
 }
 
+function loadActualMap(img) {
+  let currentPixelPointer = 0;
+  img.loadPixels();
+  console.log(img);
+
+  let saveArr = [...img.pixels];
+
+  let getPixelValues = (slots) => {
+    let total = 0;
+    let pow256 = Math.pow(256, slots - 1);
+    for (let i = slots - 1; i > 0; i--) {
+      let p = getPixelValue();
+      total += pow256 * p;
+      pow256 /= 256;
+    }
+    total += getPixelValue();
+    return total;
+  }
+
+  //Helper function, gets single pixel channel value
+  let getPixelValue = () => {
+    let curr = currentPixelPointer;
+    if ((curr + 1) % 4 === 0) {
+      currentPixelPointer++;
+      return getPixelValue();
+    }
+    currentPixelPointer++;
+    return saveArr[curr];
+  }
+
+  let mapWidth = getPixelValue();
+  let mapHeight = getPixelValue();
+
+  let tmpMap = new WorldMap(mapWidth, map.xRelToParent, map.yRelToParent, map.wRelToParent, map.hRelToParent);
+  map.clear();
+  map.removeImages();
+  map.tiles = [];
+  map.width = tmpMap.width;
+  map.height = tmpMap.height;
+  camera = {
+    x: map.width / 2,
+    y: map.height / 2
+  };
+
+  for (let i = 0; i < tmpMap.tiles.length; i++) {
+    map.tiles[i] = [];
+    for (let j = 0; j < tmpMap.tiles.length; j++) {
+      map.tiles[i][j] = new TileSet(i, j);
+      let a = getPixelValue();
+      let b = getPixelValue();
+      let c = getPixelValue();
+      let d = getPixelValue() + 1;
+      map.tiles[i][j].setAll(a, b, c, d);
+    }
+  }
+  map.forceUpdate();
+}
+
 function loadMap() {
   let saveName = "test" + parseInt(slotInput.value()) + ".png";
   //if (!isLocalhost) saveName = "Fruit-Smasher/" + saveName;
@@ -168,17 +249,41 @@ function loadMap() {
 function saveMap() {
   let saveName = "test" + parseInt(slotInput.value()) + ".png";
   //if (!isLocalhost) saveName = "Fruit-Smasher/" + saveName;
-  let saveImg = createImage(map.width, map.height);
-  let getID = (a, b) => {
-    return 50 * a + b;
-  };
+  let currentPixelPointer = 0;
+  let neededDim = map.width * map.height * 4;
+  let usableDim = neededDim / 4 * 3;
+  let ratioOfExtraDimNeeded = 4 / 3;
+  let actualDim = ceil(sqrt(neededDim * ratioOfExtraDimNeeded));
+  let saveImg = createImage(actualDim, actualDim);;
+  let setPixels = (value, slots) => {
+    let pow256 = Math.pow(256, slots - 1);
+    for (let i = slots - 1; i > 0; i--) {
+      setPixel(floor(value / pow256) % 256);
+      pow256 /= 256;
+    }
+    setPixel(value % 256);
+  }
+
+  //Helper function for setting a single pixel channel
+  let setPixel = (value) => {
+    if ((currentPixelPointer + 1) % 4 === 0) {
+      saveImg.pixels[currentPixelPointer] = 255;
+      currentPixelPointer++;
+    }
+    saveImg.pixels[currentPixelPointer] = value;
+    currentPixelPointer++;
+  }
   saveImg.loadPixels();
+  setPixel(map.width);
+  setPixel(map.height);
   for (let i = 0; i < map.width; i++) {
     for (let j = 0; j < map.height; j++) {
-      saveImg.pixels[(j * map.width + i) * 4] = getID(map.tiles[i][j].tileID, map.tiles[i][j].entityID);
-      saveImg.pixels[(j * map.width + i) * 4 + 1] = getID(map.tiles[i][j].tileID, map.tiles[i][j].entityID);
-      saveImg.pixels[(j * map.width + i) * 4 + 2] = getID(map.tiles[i][j].tileID, map.tiles[i][j].entityID);
-      saveImg.pixels[(j * map.width + i) * 4 + 3] = 255;
+      let t = map.getIDs(i, j);
+      setPixel(t.tID);
+      setPixel(t.eID);
+      setPixel(t.sID);
+      //Default is -1 (no enemy), but PNG can't handle that
+      setPixel(t.enID + 1);
     }
   }
   saveImg.updatePixels();
@@ -394,21 +499,28 @@ function keyPressed() {
   switch (keyCode) {
     case UP_ARROW:
       camera.y--;
-      map.updateImages(0, -1);
+      map.forceUpdate();
       break;
     case DOWN_ARROW:
       camera.y++;
-      map.updateImages(0, 1);
+      map.forceUpdate();
       break;
     case LEFT_ARROW:
       camera.x--;
-      map.updateImages(-1, 0);
+      map.forceUpdate();
       break;
     case RIGHT_ARROW:
       camera.x++;
-      map.updateImages(1, 0);
+      map.forceUpdate();
       break;
     case 32: //SPACE
+      map.forceUpdate();
+      break;
+    case 82: //R
+      camera = {
+        x: map.width / 2,
+        y: map.height / 2
+      };
       map.forceUpdate();
       break;
   }
@@ -709,12 +821,7 @@ class WorldMap extends BaseUIBlock {
     this.displayOnce();
   }
 
-  forceUpdate() {
-    console.log("Forcing Cached Tiles Update");
-    let viewRange = this.viewRange;
-    let xPos = camera.x - floor(viewRange / 2);
-    let yPos = camera.y - floor(viewRange / 2);
-    let w1 = 1 / viewRange;
+  removeImages() {
     for (let i = 0; i < this.cachedTiles.length; i++) {
       for (let j = 0; j < this.cachedTiles.length; j++) {
         let t = this.cachedTiles[i][j];
@@ -722,6 +829,15 @@ class WorldMap extends BaseUIBlock {
         if (t.entity) t.entity.content.elt.remove();
       }
     }
+  }
+
+  forceUpdate() {
+    console.log("Forcing Cached Tiles Update");
+    let viewRange = this.viewRange;
+    let xPos = camera.x - floor(viewRange / 2);
+    let yPos = camera.y - floor(viewRange / 2);
+    let w1 = 1 / viewRange;
+    this.removeImages();
     this.cachedTiles = new Array(viewRange);
     for (let i = 0; i < viewRange; i++) {
       this.cachedTiles[i] = [];
@@ -786,6 +902,7 @@ class WorldMap extends BaseUIBlock {
         tID: -1,
         sID: -1,
         eID: -1,
+        enID: -1,
       }
     } else {
       let t = this.tiles[x][y];
@@ -793,6 +910,7 @@ class WorldMap extends BaseUIBlock {
         tID: t.tileID,
         sID: t.subTexID,
         eID: t.entityID,
+        enID: t.enemyID
       }
     }
   }
@@ -917,6 +1035,13 @@ class TileSet {
     this.entityID = 0;
     this.enemyID = -1;
     this.visible = false;
+  }
+
+  setAll(a, b, c, d) {
+    this.set(a);
+    this.setEntity(b);
+    this.setTex(c);
+    this.setEnemyID(d);
   }
 
   setEntity(i) {
